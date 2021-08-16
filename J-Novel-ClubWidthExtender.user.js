@@ -3,6 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.1
 // @description  Added part completion to J-Novel-Club as well as an i-frame extender to tc_width_percent value.
+// @downloadURL  https://github.com/infaerina/j-novel-club-userscript/raw/master/J-Novel-ClubWidthExtender.user.js
 // @author       Infaerina
 // @match        https://j-novel.club/read/*
 // @match        https://j-novel.club/series/*
