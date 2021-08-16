@@ -5,15 +5,42 @@
 // @description  Added part completion to J-Novel-Club as well as an i-frame extender to tc_width_percent value.
 // @downloadURL  https://github.com/infaerina/j-novel-club-userscript/raw/master/J-Novel-ClubWidthExtender.user.js
 // @author       Infaerina
-// @match        https://j-novel.club/read/*
-// @match        https://j-novel.club/series/*
+// @match        https://j-novel.club/*
 // @icon         https://www.google.com/s2/favicons?domain=j-novel.club
+// @require      http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js
+// @require      https://gist.github.com/raw/2625891/waitForKeyElements.js
 // @grant        none
 // @run-at       document-idle
 // ==/UserScript==
 
+//Wait for key elements and observe page changes to re-run setup!
+var fireOnHashChangesToo    = true;
+var pageURLCheckTimer       = setInterval (
+    function () {
+        if (   this.lastPathStr  !== location.pathname
+            || this.lastQueryStr !== location.search
+            || (fireOnHashChangesToo && this.lastHashStr !== location.hash)
+        ) {
+            this.lastPathStr  = location.pathname;
+            this.lastQueryStr = location.search;
+            this.lastHashStr  = location.hash;
+            setup ();
+        }
+    }
+    , 111
+);
+/*
+        Variables!
+            Feel free to change these as you see fit!
+*/
 var tc_width_percent = 95;
 var tc_css_selector = '.ftutoe9';
+var tc_read_color_background = "green";
+var tc_read_color_text = "lightgreen";
+var tc_some_color_background = "DeepSkyBlue";
+var tc_some_color_text = "AliceBlue";
+
+//Private variables.
 var tc_user_id;
 var tc_parts_json;
 var tc_current_parts_json;
@@ -84,11 +111,11 @@ async function setupParts(){
             let comp = ps.find(r=>r.part =='part ' + j).completion;
             if (comp >= 97) {
                 comp = 100;
-                pe[j].style.background = "green";
-                pe[j].style.color = "lightgreen";
+                pe[j].style.background = tc_read_color_background;
+                pe[j].style.color = tc_read_color_text;
             } else if (comp >= 1){
-                pe[j].style.background = "DeepSkyBlue";
-                pe[j].style.color = "AliceBlue";
+                pe[j].style.background = tc_some_color_background;
+                pe[j].style.color = tc_some_color_text;
             }
             // Instead of this, I want to add a new span.
             let e = document.createElement('span');
@@ -100,6 +127,10 @@ async function setupParts(){
 }
 
 function setup(){
+    waitForKeyElements(tc_css_selector, start);
+}
+
+function start(){
     //Increase width (in reader area only)
     if(!document.querySelector(tc_css_selector)) return;
     document.querySelector(tc_css_selector).setAttribute('style', 'max-width: ' + tc_width_percent + '% !important');
