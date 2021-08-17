@@ -218,13 +218,13 @@ function setupPercentages(){
                 } else if (comp >= 1){
                     pe[j].style.background = tc_some_color_background;
                     pe[j].style.color = tc_some_color_text;
+                    let e = document.createElement('span');
+                    let t = document.createTextNode('  ' + comp + '%');
+                    e.appendChild(t);
+                    pe[j].appendChild(e);
                 } else if (comp == 0){
                     continue;
                 }
-                let e = document.createElement('span');
-                let t = document.createTextNode('  ' + comp + '%');
-                e.appendChild(t);
-                pe[j].appendChild(e);
             } else if (tc_type == 'manga'){
                 if(comp >= 1){
                     pe[j].style.background = tc_some_color_background;
