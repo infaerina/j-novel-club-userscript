@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         J-Novel Club Enhancements
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.11
 // @description  Added part completion to J-Novel-Club as well as an i-frame extender to tc_width_percent value.
 // @downloadURL  https://github.com/infaerina/j-novel-club-userscript/raw/master/J-Novel-ClubWidthExtender.user.js
 // @author       Infaerina
@@ -35,6 +35,7 @@ var pageURLCheckTimer       = setInterval (
             Feel free to change these as you see fit!
 */
 var tc_width_percent = 95;
+var tc_percent_complete = 95;
 var tc_css_selector = '.ftutoe9';
 var tc_read_color_background = "green";
 var tc_read_color_text = "lightgreen";
@@ -48,9 +49,20 @@ var tc_parts_json;
 var tc_current_parts_json;
 var tc_parts;
 
+var tc_type;
+
 function getParts(){
     tc_user_id = document.cookie.split('; ').find(row=>row.startsWith('userId=')).split('=')[1].replace('s%3A','').split('.')[0];
-    let s = 'https://api.j-novel.club/api/users/' + tc_user_id + '/readParts?format=json';
+    var s;
+    if(document.querySelectorAll('.novel').length>0){
+        tc_type = 'novel';
+        s = 'https://api.j-novel.club/api/users/' + tc_user_id + '/readParts?format=json';
+    } else if (document.querySelectorAll('.manga').length>0){
+        tc_type = 'manga';
+        s = 'https://api.j-novel.club/api/users/' + tc_user_id + '/mangaReadParts?format=json';
+    } else {
+        return;
+    }
     return fetch(
         s,
         {
@@ -61,8 +73,19 @@ function getParts(){
 }
 
 function getCurrentParts(){
+    //Always seems to be series.
     let slug = document.documentURI.split('series/')[1];
-    let s = 'https://api.j-novel.club/api/series/findOne?filter=%7B%22where%22%3A%7B%22titleslug%22%3A%22' + slug + '%22%7D%2C%22include%22%3A%5B%7B%22volumes%22%3A%5B%22publishInfos%22%5D%7D%2C%7B%22relation%22%3A%22parts%22%2C%22scope%22%3A%7B%22fields%22%3A%5B%22id%22%2C%22title%22%2C%22titleslug%22%2C%22created%22%2C%22expired%22%2C%22expirationDate%22%2C%22partNumber%22%2C%22preview%22%2C%22launchDate%22%2C%22serieId%22%2C%22volumeId%22%5D%7D%7D%5D%7D';
+    if(slug.includes('#'))  slug = slug.substring(0, slug.search('#'));
+    var s;
+    if(document.querySelectorAll('.novel').length>0){
+        tc_type = 'novel';
+        s = 'https://api.j-novel.club/api/series/findOne?filter={"where":{"titleslug":"' + slug + '"},"include":["volumes","parts"]}';
+    } else if (document.querySelectorAll('.manga').length>0){
+        tc_type = 'manga';
+        s = 'https://api.j-novel.club/api/mangaSeries/findOne?filter={"where":{"titleslug":"' + slug + '"},"include":["mangaVolumes","mangaParts"]}';
+    } else {
+        return;
+    }
     return fetch(
         s,
         {
@@ -76,24 +99,54 @@ function getCurrentParts(){
 function populatePartsArray(){
     //create an array equal to the number of parts in current parts.
     var pTemp = [];
-    for (let i = 0; i < tc_current_parts_json.parts.length; i++){
-        let p = tc_current_parts_json.parts[i];
-        var volume = p.titleslug.substring(p.titleslug.search('-volume-') + 1, p.titleslug.search('-part-')).replace('-', ' ');
-        var part = p.titleslug.substring(p.titleslug.search('-part-') + 1, p.titleslug.length).replace('-', ' ');
+    //Do this to handle manga/novel types
+    var typeSelectorV;
+    var typeSelectorP;
+    var typeSelectorVID;
+    var typeSelectorPID;
+    if (tc_type == "novel"){
+        typeSelectorV = 'volumes';
+        typeSelectorP = 'parts'
+        typeSelectorVID = "volumeId"
+        typeSelectorPID = 'partId';
+    } else if (tc_type == "manga"){
+        typeSelectorV = 'mangaVolumes';
+        typeSelectorP = 'mangaParts';
+        typeSelectorVID = "mangaVolumeId";
+        typeSelectorPID = 'mangaPartId';
+    } else {
+        return;
+    }
+    for (let i = 0; i < tc_current_parts_json[typeSelectorP].length; i++){
+        let p = tc_current_parts_json[typeSelectorP][i];
+        //Remove all non-alpha numeric characters /[^a-zA-Z0-9 -]/
+        var mainTitle = tc_current_parts_json.title.replace(/[^A-Za-z0-9]/g,' ').replace(/\s+/g, " ").trim();
+        var partTitle = p.title.replace(/[^A-Za-z0-9]/g,' ').replace(/\s+/g, " ").trim();
+        var volumeTitle = tc_current_parts_json[typeSelectorV].find(r=>r.id == p[typeSelectorVID]).title.replace(/[^A-Za-z0-9]/g,' ').replace(/\s+/g, " ").trim();
+        var volume = volumeTitle.replace(mainTitle,'').trim();
+        var part = partTitle.replace(mainTitle,'').replace(volume,'').trim();
         //Find instead of filter, since each part ID is unique.
-        var row = tc_parts_json.find(r=>r.partId == p.id);
+        var row = tc_parts_json.find(r=>r[typeSelectorPID] == p.id);
         var comp;
+        //If it is a manga it will be page number, not percentage.
+        /*
+            They do not store max pages in manga parts, making it impossible to tell if it's fully read. FFS.
+        */
         if (row){
-            comp = Math.round(row.maxCompletion * 100);
+            if(tc_type == 'novel'){
+                comp = Math.round(row.maxCompletion * 100);
+            } else if (tc_type == 'manga'){
+                comp = row.maxCompletion;
+            }
         } else {
             comp = 0;
         }
         let t =
             {
-                volume: volume,
-                part: part,
+                volume: volume.toLowerCase(),
+                part: part.toLowerCase(),
                 completion: comp,
-                titleslug: tc_current_slug
+                titleslug: tc_current_slug.toLowerCase()
             }
         pTemp.push(t);
     }
@@ -126,28 +179,62 @@ function setupParts(){
 
 function setupPercentages(){
     //Get all of the element containers for each book.
-    var list = document.querySelectorAll('.novel');
+    var list;
+    if (tc_type == 'novel'){
+        list = document.querySelectorAll('.novel');
+    } else if (tc_type == 'manga'){
+        list = document.querySelectorAll('.manga');
+    } else {
+        return;
+    }
     //First element is useless (title block)
     for (let i = 1; i < list.length; i++){
-        let ps = tc_parts.filter(r=>r.volume == list[i].innerText.split('\n')[0].toLowerCase())
+        let ps = tc_parts.filter(r=>r.volume == list[i].querySelector('h2 > a').innerText.toLowerCase())
+        if (ps.length == 0) continue;
         let pe = list[i].querySelectorAll('.block');
         //First element is "parts available" (ignore)
         for (let j = 1; j < pe.length; j++){
             //Exit if you've already slipped in a span element.
             if(pe[j].querySelectorAll('span').length > 2) return;
-            let comp = ps.find(r=>r.part =='part ' + j).completion;
-            if (comp >= 97) {
-                comp = 100;
-                pe[j].style.background = tc_read_color_background;
-                pe[j].style.color = tc_read_color_text;
-            } else if (comp >= 1){
-                pe[j].style.background = tc_some_color_background;
-                pe[j].style.color = tc_some_color_text;
+            var comp;
+            let v = list[i].querySelectorAll('a.link')[j].innerText.replace('\n', ' ').toLowerCase().trim();
+            //This can be Chapter, Part, or Pt. or just the number.
+            if(v.includes('pt.')) v = v.replace('pt.', 'part')
+            if(/^\d+$/.test(v)){
+                if(tc_type == 'novel') v = 'part ' + v;
+                if(tc_type == 'manga') v = 'chapter ' + v;
             }
-            let e = document.createElement('span');
-            let t = document.createTextNode('  ' + comp + '%');
-            e.appendChild(t);
-            pe[j].appendChild(e);
+            if(ps.find(r=>r.part == v)){
+                comp = ps.find(r=>r.part == v).completion;
+            } else {
+                comp = 0;
+                continue;
+            }
+            if(tc_type == 'novel'){
+                if (comp >= tc_percent_complete) {
+                    comp = 100;
+                    pe[j].style.background = tc_read_color_background;
+                    pe[j].style.color = tc_read_color_text;
+                } else if (comp >= 1){
+                    pe[j].style.background = tc_some_color_background;
+                    pe[j].style.color = tc_some_color_text;
+                } else if (comp == 0){
+                    continue;
+                }
+                let e = document.createElement('span');
+                let t = document.createTextNode('  ' + comp + '%');
+                e.appendChild(t);
+                pe[j].appendChild(e);
+            } else if (tc_type == 'manga'){
+                if(comp >= 1){
+                    pe[j].style.background = tc_some_color_background;
+                    pe[j].style.color = tc_some_color_text;
+                    let e = document.createElement('span');
+                    let t = document.createTextNode(' pg ' + comp);
+                    e.appendChild(t);
+                    pe[j].appendChild(e);
+                }
+            }
         }
     }
 }
@@ -155,7 +242,7 @@ function setupPercentages(){
 function setup(){
     waitForKeyElements(tc_css_selector, start);
     //This selector will fire EVERY TIME an element appears that matches it, so make sure that's what you want.
-    waitForKeyElements('.novel:first-of-type', setupParts);
+    waitForKeyElements('.novel:first-of-type,.manga:first-of-type', setupParts);
 }
 
 function start(){
