@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         J-Novel Club Enhancements
 // @namespace    http://tampermonkey.net/
-// @version      0.11
+// @version      0.1.1.1
 // @description  Added part completion to J-Novel-Club as well as an i-frame extender to tc_width_percent value.
 // @downloadURL  https://github.com/infaerina/j-novel-club-userscript/raw/master/J-Novel-ClubWidthExtender.user.js
 // @author       Infaerina
@@ -56,10 +56,10 @@ function getParts(){
     var s;
     if(document.querySelectorAll('.novel').length>0){
         tc_type = 'novel';
-        s = 'https://api.j-novel.club/api/users/' + tc_user_id + '/readParts?format=json';
+        s = 'https://api.j-novel.club/api/users/' + tc_user_id + '/readParts';
     } else if (document.querySelectorAll('.manga').length>0){
         tc_type = 'manga';
-        s = 'https://api.j-novel.club/api/users/' + tc_user_id + '/mangaReadParts?format=json';
+        s = 'https://api.j-novel.club/api/users/' + tc_user_id + '/mangaReadParts';
     } else {
         return;
     }
@@ -134,9 +134,9 @@ function populatePartsArray(){
         */
         if (row){
             if(tc_type == 'novel'){
-                comp = Math.round(row.maxCompletion * 100);
+                comp = Math.round(row.completion * 100);
             } else if (tc_type == 'manga'){
-                comp = row.maxCompletion;
+                comp = row.completion;
             }
         } else {
             comp = 0;
